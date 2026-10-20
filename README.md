@@ -59,7 +59,17 @@ From the project root, with the backend running:
 
 This wrapper disables Windows desktop generation only for that command, avoiding a Windows symlink/Developer Mode requirement when building Android. It preserves global Flutter settings. Ordinary `flutter run` also works on machines with symlink support.
 
-Create an account as Student, Investor or Buyer, verify the signup email, then sign in using password followed by a fresh email code. Account screens show verified identity and active sessions, with current/other-session sign-out. A valid saved session opens the account on restart. The debug build retains **Development connection → Check connection** for real emulator-to-backend verification; it is absent in release builds.
+Create an account as Student, Investor or Buyer, verify the signup email, then sign in using password followed by a fresh email code. Account screens show verified identity and active sessions, with current/other-session sign-out. A valid saved session opens the account on restart. In debug builds, press and hold the Orwickle logo to open **Development connection → Check connection** for real emulator-to-backend verification; it is absent in release builds.
+
+The mobile authentication screens follow the supplied white/navy/teal reference, including role cards and a six-cell code input with native paste and autofill support. Plus Jakarta Sans is bundled for offline use; its SIL Open Font License is included at `mobile/assets/fonts/OFL.txt`.
+
+To capture the four authentication screens on the Android emulator:
+
+```powershell
+.\scripts\flutter-android.ps1 drive --driver=test_driver/auth_ui_driver.dart --target=integration_test/auth_ui_test.dart -d emulator-5554
+```
+
+This presentation test uses explicit authentication fixtures and writes PNGs to ignored `.local/ui-screenshots/`. Run the normal Flutter command afterward to restore the app with its actual backend connection.
 
 ## Run the administrator web panel
 

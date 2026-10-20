@@ -9,8 +9,7 @@ void main() {
   testWidgets('Android app reaches the real Express backend', (tester) async {
     app.main();
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Development connection'));
-    await tester.tap(find.text('Development connection'));
+    await tester.longPress(find.byKey(const ValueKey('orwickle-brand')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Check connection'));
     await tester.tap(find.text('Check connection'));
@@ -42,6 +41,6 @@ void main() {
         reason: 'Emulator must receive a real backend response',
       );
     }
-    expect(find.text('Welcome back.'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
   });
 }

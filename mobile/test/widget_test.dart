@@ -32,8 +32,8 @@ void main() {
       );
       await tester.pumpWidget(MyApp(api: api));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Create an account'));
-      await tester.tap(find.text('Create an account'));
+      await tester.ensureVisible(find.text('Create account'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
       expect(find.text('Student'), findsOneWidget);
       expect(find.text('Investor'), findsOneWidget);
@@ -107,23 +107,20 @@ void main() {
       await tester.pumpWidget(MyApp(api: api));
       await tester.pumpAndSettle();
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Email address'),
+        find.byKey(const ValueKey('field-email')),
         'student@example.test',
       );
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Password'),
+        find.byKey(const ValueKey('field-password')),
         'test-only long password',
       );
-      await tester.ensureVisible(find.text('Continue with email code'));
-      await tester.tap(find.text('Continue with email code'));
+      await tester.ensureVisible(find.text('Continue'));
+      await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Check your inbox.'), findsOneWidget);
+      expect(find.text('Verify your email'), findsOneWidget);
       expect(storage.value, isNull);
       expect(find.text('Sample Student'), findsNothing);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Email verification code'),
-        '123456',
-      );
+      await tester.enterText(find.byKey(const ValueKey('otp-input')), '123456');
       await tester.ensureVisible(find.text('Verify code'));
       await tester.tap(find.text('Verify code'));
       await tester.pumpAndSettle();

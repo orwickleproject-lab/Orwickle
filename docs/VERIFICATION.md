@@ -1,5 +1,15 @@
 # Setup verification
 
+## Mobile reference UI, 2026-10-20
+
+The four supplied reference screens are implemented in Flutter: sign-in, signup with Student/Investor/Buyer cards, six-cell email verification, and password recovery. Shared styles use white, navy and teal, a vector brand mark, and bundled Plus Jakarta Sans under the included SIL Open Font License. The existing authentication API and session storage remain connected.
+
+Flutter analysis is clean and all eight unit/widget tests pass. New interaction coverage checks OTP paste, digit filtering, deletion, six-digit validation and cell selection; compact 320px signup checks role submission, independent password visibility and navigation back from verification. Existing OTP session-gating and revoked-session tests also pass.
+
+The Android presentation smoke test passed on `emulator-5554` and all four captured screens were visually inspected. It uses explicit mocked HTTP and empty in-memory session storage, saving PNGs to ignored `.local/ui-screenshots/`; these screenshots do not establish real email delivery or database-backed authentication. Run it with the command in the README. Real backend reachability is tested separately using `backend_connection_test.dart`. The debug diagnostic panel now opens by pressing and holding the Orwickle logo.
+
+The updated real Android-to-Express connection test also passed through this diagnostic panel. It confirms backend HTTP reachability while PostgreSQL readiness remains unavailable, consistent with the network blocker below. No database success or live authentication is simulated in the normal app.
+
 ## Authentication implementation — current status, 2026-10-20
 
 **Implementation is present and locally tested. Full live authentication is not complete: hosted PostgreSQL TCP access still times out.** Foundation results below are historical evidence from before this change, not a claim that its live connection still passes today.
@@ -9,7 +19,7 @@
 | Scope / checkpoint | Exact request saved in `AUTH_SCOPE.md`; pre-change tag `checkpoint/pre-auth-20261020` at `a066265`. |
 | Backend checks | Syntax checks and 16 tests pass. Auth scenarios use a real isolated PostgreSQL engine through PGlite, with an in-memory sender; health tests use injected doubles. Includes failed-session-persistence and sanitized post-response failure regression checks. |
 | Backend coverage | Signup and all public roles; no Administrator signup; password-before-OTP; purpose binding, invalid/expired/reused codes, attempt/resend caps; server role restrictions; durable server session restoration; cross-account session isolation; current/other logout; reset grant reuse rejection and session revocation; administrator OTP and absolute expiry; restricted-role SQL escalation rejection. |
-| Flutter | Analysis clean; six unit/widget tests pass with mocked HTTP and in-memory credential storage where applicable. Signup roles, validation, OTP gate and clearing a revoked saved session are covered. New branded app was also built, launched and visually inspected on the emulator. |
+| Flutter | Analysis clean; eight unit/widget tests pass with mocked HTTP and in-memory credential storage where applicable. Signup roles, validation, OTP gate, six-cell input behavior, compact layout and clearing a revoked saved session are covered. The updated reference UI was built and visually inspected on the emulator. |
 | Real Android storage | `secure_storage_test.dart` passes on `emulator-5554`; Keystore-backed plugin writes, reads through a new storage instance and deletes probe material. |
 | Real Android → Express | Updated app's `backend_connection_test.dart` passes against actual Express. This run proves HTTP reachability while PostgreSQL is unavailable; it does not prove a current real database connection. |
 | React | Three client/interaction tests, production build and responsive browser test pass. Browser/React tests use explicit API fixtures, not live administrator authentication. Desktop and 390px layouts were visually inspected. |
