@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:orwickle/main.dart' as app;
@@ -13,11 +14,16 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       if (find.text('Checking connection...').evaluate().isEmpty) break;
     }
+    final observedText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data ?? '')
+        .join(' | ');
     const requireDatabase = bool.fromEnvironment('REQUIRE_DATABASE');
     if (requireDatabase) {
       expect(
         find.text('Backend and database connected securely'),
         findsOneWidget,
+        reason: 'Observed app text: $observedText',
       );
     } else {
       final reached =
