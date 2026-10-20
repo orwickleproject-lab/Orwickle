@@ -36,6 +36,7 @@ export function createDatabase(config) {
 
   return {
     configured: true,
+    pool,
     async check() {
       const client = await pool.connect();
       try {
@@ -51,6 +52,18 @@ export function createDatabase(config) {
     },
     // Used by trusted setup scripts only. Never expose arbitrary queries in an API.
     query(text, parameters) { return pool.query(text, parameters); },
+    async transaction(work) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await work(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally { client.release(); }
+    },
     close() { return pool.end(); },
   };
 }

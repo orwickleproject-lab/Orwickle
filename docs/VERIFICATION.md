@@ -1,5 +1,33 @@
 # Setup verification
 
+## Authentication implementation — current status, 2026-10-20
+
+**Implementation is present and locally tested. Full live authentication is not complete: hosted PostgreSQL TCP access still times out.** Foundation results below are historical evidence from before this change, not a claim that its live connection still passes today.
+
+| Check | Current result |
+| --- | --- |
+| Scope / checkpoint | Exact request saved in `AUTH_SCOPE.md`; pre-change tag `checkpoint/pre-auth-20261020` at `a066265`. |
+| Backend checks | Syntax checks and 16 tests pass. Auth scenarios use a real isolated PostgreSQL engine through PGlite, with an in-memory sender; health tests use injected doubles. Includes failed-session-persistence and sanitized post-response failure regression checks. |
+| Backend coverage | Signup and all public roles; no Administrator signup; password-before-OTP; purpose binding, invalid/expired/reused codes, attempt/resend caps; server role restrictions; durable server session restoration; cross-account session isolation; current/other logout; reset grant reuse rejection and session revocation; administrator OTP and absolute expiry; restricted-role SQL escalation rejection. |
+| Flutter | Analysis clean; six unit/widget tests pass with mocked HTTP and in-memory credential storage where applicable. Signup roles, validation, OTP gate and clearing a revoked saved session are covered. New branded app was also built, launched and visually inspected on the emulator. |
+| Real Android storage | `secure_storage_test.dart` passes on `emulator-5554`; Keystore-backed plugin writes, reads through a new storage instance and deletes probe material. |
+| Real Android → Express | Updated app's `backend_connection_test.dart` passes against actual Express. This run proves HTTP reachability while PostgreSQL is unavailable; it does not prove a current real database connection. |
+| React | Three client/interaction tests, production build and responsive browser test pass. Browser/React tests use explicit API fixtures, not live administrator authentication. Desktop and 390px layouts were visually inspected. |
+| Dependency audits | Backend and administrator production dependency audits report zero vulnerabilities. |
+| Real email | Gmail SMTP authentication with encryption passed. A real random OTP email was delivered and retrieved from the project inbox by its exact new challenge header; neither its code nor the replacement credential was displayed. This standalone delivery check does not prove a database-backed login. |
+| Credential incident resolved | The first generated app password was inadvertently exposed through an accessibility heading, immediately revoked, and its absence verified in Google. A replacement was captured directly into the ignored user-only `.env`, without emitting page contents. |
+| Actual Supabase schema | `orwickle_auth` schema, six auth tables, RLS and a restricted `orwickle_app` role created on existing `orwickle-dev` through authenticated HTTPS management setup. Actual privilege metadata confirms no public-table creation, storage reads or account-role updates. Runtime `.env` now uses this role; owner URI stays in `.env.migrations`. |
+| Administrator | Project-email Administrator provisioned separately using owner setup access and an unknowable initial password hash. Use the verified email recovery UI to choose a password once backend database connectivity works. No initial password is saved or displayed. |
+| Current hosted PostgreSQL/TLS | Fails before connection: `Connection terminated due to connection timeout`. Verified project-provided hostname and matching independent DNS; both addresses time out on 5432/6543 in two tool runtimes, the user's normal terminal, and after a hotspot retry. See `NETWORK_DIAGNOSTICS.md`. |
+| Full real auth integration | Runner implemented, but its actual run stops at database preflight. Real database-backed OTP flows, reset/revocation and hosted role enforcement through the normal Express PostgreSQL connection remain unverified. |
+| Source/history secret scan | Actual local runtime/owner DB credentials, session secrets, OTP pepper and SMTP credential are checked against source, Git objects and local setup logs before commit. |
+
+No Firebase, Supabase Auth, marketplace features, new cloud projects, paid services or production deployment were introduced. The management token remains outside the backend runtime. Browser automation was stopped when the user pressed Escape; subsequent work used development commands only.
+
+Android auth changes add the standard Internet permission and disable session backup. The existing debug-only loopback HTTP policy remains; release cleartext access is not enabled. Plugin builds required Android SDK Platform 35 and CMake 3.22.1, installed alongside the existing SDK. A project-local in-process Kotlin compiler setting resolves Windows daemon process creation errors. Application ID, Flutter SDK, signing and existing emulator remain unchanged.
+
+## Earlier foundation verification (historical)
+
 Date: 2026-10-20 (Asia/Karachi).
 
 | Item | Result |

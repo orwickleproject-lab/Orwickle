@@ -7,12 +7,32 @@ export class HttpError extends Error {
 }
 
 export function errorHandler(error, request, response, _next) {
-  if (response.headersSent) return _next(error);
+  if (response.headersSent) {
+    console.error('Request failed after response', { requestId: request.id });
+    return response.destroy();
+  }
   let status = 500;
   let code = 'INTERNAL_ERROR';
   let message = 'An unexpected error occurred';
   if (error instanceof HttpError) {
     ({ status, code, message } = error);
+  } else if (
+    [
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+      '28P01',
+      'CERT_HAS_EXPIRED',
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    ].includes(error.code) ||
+    error.message === 'Connection terminated due to connection timeout'
+  ) {
+    status = 503;
+    code = 'SERVICE_UNAVAILABLE';
+    message = 'The service is temporarily unavailable. Please try again shortly.';
   } else if (error.type === 'entity.parse.failed') {
     status = 400;
     code = 'INVALID_JSON';

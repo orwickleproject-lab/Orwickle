@@ -9,6 +9,10 @@ void main() {
   testWidgets('Android app reaches the real Express backend', (tester) async {
     app.main();
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Development connection'));
+    await tester.tap(find.text('Development connection'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Check connection'));
     await tester.tap(find.text('Check connection'));
     for (var attempt = 0; attempt < 100; attempt++) {
       await tester.pump(const Duration(milliseconds: 200));
@@ -38,9 +42,6 @@ void main() {
         reason: 'Emulator must receive a real backend response',
       );
     }
-    // Confirm that the original starter still works after the connection check.
-    await tester.tap(find.byTooltip('Increment'));
-    await tester.pump();
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Welcome back.'), findsOneWidget);
   });
 }

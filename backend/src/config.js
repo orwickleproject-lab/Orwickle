@@ -22,9 +22,24 @@ const environmentSchema = z.object({
   }),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(10).default(5),
   DATABASE_SSL_CA_FILE: optionalText,
+  SESSION_SECRET: optionalText.refine((v) => !v || v.length >= 64),
+  OTP_PEPPER: optionalText.refine((v) => !v || v.length >= 64),
+  ADMIN_ORIGIN: z.url().default('http://localhost:5173'),
+  SMTP_HOST: optionalText,
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
+  SMTP_SECURE: z.enum(['true', 'false']).default('true'),
+  SMTP_USER: optionalText,
+  SMTP_PASSWORD: optionalText,
+  MAIL_FROM: optionalText,
 }).superRefine((value, context) => {
   if (value.NODE_ENV === 'production' && !value.DATABASE_URL) {
     context.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required' });
+  }
+  if (value.NODE_ENV === 'production') {
+    for (const field of ['SESSION_SECRET','OTP_PEPPER','SMTP_HOST','SMTP_USER','SMTP_PASSWORD','MAIL_FROM']) {
+      if (!value[field]) context.addIssue({ code: 'custom', path: [field], message: 'Required' });
+    }
+    if (!value.ADMIN_ORIGIN.startsWith('https://')) context.addIssue({ code:'custom',path:['ADMIN_ORIGIN'],message:'HTTPS required' });
   }
 });
 

@@ -4,8 +4,9 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import { errorHandler, HttpError } from './middleware/errors.js';
 import { healthRouter } from './routes/health.js';
+import { createAuthRouter } from './auth/router.js';
 
-export function createApp({ database }) {
+export function createApp({ database, config, mailer }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
@@ -26,6 +27,9 @@ export function createApp({ database }) {
   }));
   app.use(express.json({ limit: '16kb' }));
   app.use('/health', healthRouter(database));
+  if (config?.SESSION_SECRET && config?.OTP_PEPPER && database.configured) {
+    app.use('/api', createAuthRouter({ database, config, mailer }));
+  }
   app.use((_request, _response, next) => {
     next(new HttpError(404, 'NOT_FOUND', 'Endpoint not found'));
   });

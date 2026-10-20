@@ -1,11 +1,42 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createDatabase } from '../src/db.js';
+import express from 'express';
+import { errorHandler } from '../src/middleware/errors.js';
 
 const unconfigured = { configured: false, async check() { throw new Error('Do not call'); } };
+
+test('post-response failures never reach the default handler with sensitive error data',()=>{
+  const log=mock.method(console,'error',()=>{});
+  let destroyed=false;
+  try{
+    errorHandler(new Error('sensitive-test-detail'),{id:'test-id'},{headersSent:true,destroy(){destroyed=true;}},()=>assert.fail('Must not forward the original error'));
+    assert.equal(destroyed,true);
+    assert.doesNotMatch(JSON.stringify(log.mock.calls.map(c=>c.arguments)),/sensitive-test-detail/);
+  }finally{log.mock.restore();}
+});
+
+test('database network failures are sanitized as a retryable service outage', async()=>{
+  const app=express();
+  app.get('/',()=>{throw Object.assign(new Error('private database details'),{code:'ETIMEDOUT'});});
+  app.use(errorHandler);
+  const response=await request(app).get('/');
+  assert.equal(response.status,503);
+  assert.equal(response.body.error.code,'SERVICE_UNAVAILABLE');
+  assert.doesNotMatch(response.text,/private|database details/);
+});
+
+test('CSRF bootstrap does not claim success before PostgreSQL session persistence',async()=>{
+  const database={configured:true,pool:{query:async()=>{throw new Error('Connection terminated due to connection timeout');}}};
+  const config=loadConfig({SESSION_SECRET:'s'.repeat(96),OTP_PEPPER:'p'.repeat(96)});
+  const response=await request(createApp({database,config,mailer:{configured:false}})).get('/api/csrf');
+  assert.equal(response.status,503);
+  assert.equal(response.body.csrfToken,undefined);
+  assert.equal(response.body.error.code,'SERVICE_UNAVAILABLE');
+});
 
 test('liveness is independent of PostgreSQL and sends security headers', async () => {
   const response = await request(createApp({ database: unconfigured })).get('/health/live');

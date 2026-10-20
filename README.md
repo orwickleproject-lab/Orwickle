@@ -1,84 +1,83 @@
-# Orwickle development foundation
+# Orwickle
 
-Flutter client in `mobile/`, Express 5 API in `backend/`, and Supabase PostgreSQL/storage. The original counter starter is preserved in Git commit `2251b47`.
+Flutter mobile app (`mobile/`), Express API (`backend/`) and a separate React administrator account panel (`admin/`). Scope is limited to signup, email OTP login, password recovery, protected account access and session management. The exact request is saved in [docs/AUTH_SCOPE.md](docs/AUTH_SCOPE.md).
 
-Private repository: [orwickleproject-lab/Orwickle](https://github.com/orwickleproject-lab/Orwickle). GitHub CLI is authenticated as `orwickleproject-lab`; the root repository uses its credential helper locally, preserving global Git settings.
+Existing private repository: [orwickleproject-lab/Orwickle](https://github.com/orwickleproject-lab/Orwickle). Existing Free-plan Supabase project: [orwickle-dev](https://supabase.com/dashboard/project/pteqcyrstpxvvwkwujuj), Orwickle organization, Mumbai. Reuse these resources. The original Flutter starter remains in commit `2251b47`; the complete pre-auth foundation is tagged `checkpoint/pre-auth-20261020`.
 
-Development backend: [orwickle-dev](https://supabase.com/dashboard/project/pteqcyrstpxvvwkwujuj), in the **Orwickle** organization on the verified **Free** plan. PostgreSQL 17 is hosted in Mumbai (`ap-south-1`). Reuse this project; the local backend is already connected to it.
+**Live authentication setup is pending the prerequisites listed in [verification status](docs/VERIFICATION.md).** Local automated checks are separate from real email/database verification.
+
+On this machine the actual schema, restricted runtime role, administrator and real email sender are configured. SMTP authentication and actual OTP delivery passed. The remaining blocker is PostgreSQL TCP connectivity: both ports still time out after verified endpoint/DNS checks, a normal-terminal comparison and a hotspot retry. See [network evidence](docs/NETWORK_DIAGNOSTICS.md). Full hosted auth flows are not yet verified.
 
 ## Requirements
 
-- Node.js 24 LTS and npm (verified here: Node 24.10.0, npm 11.6.1).
-- Existing Flutter/Android setup (verified here: Flutter 3.47.7, Dart 3.13.5, Android emulator `emulator-5554`).
-- Access to the existing Supabase development project and private GitHub repository. See [verification status](docs/VERIFICATION.md) for the tested results.
+Node 24, npm, the existing Flutter/Android SDK and emulator, and access to the existing Supabase database. Gmail email delivery uses a Google app password for the project email, entered locally. No new account, paid plan, Firebase or Supabase Auth is required.
 
-## Start the backend
+## Local credentials and database setup
 
-In PowerShell:
+Existing credentials remain in ignored files. Never paste passwords, tokens, codes or database URIs into chat, Git or command arguments. Runtime credentials belong in `backend/.env`; owner setup credentials belong in `backend/.env.migrations`. Examples contain placeholders only.
+
+From the project root, once PostgreSQL is reachable:
+
+```powershell
+.\scripts\migrate-auth.ps1
+```
+
+The idempotent migration preserves an owner environment separately, creates the private auth schema and a restricted `orwickle_app` role, then writes a restricted runtime URI and random session/OTP secrets locally. It never displays credentials. Owner access is used only for migrations, administrator provisioning and private-storage setup. Do not replace the runtime URI with the owner URI after migration.
+
+The current schema was applied with the setup-only `scripts/migrate-auth-management.ps1` path using the existing DPAPI-protected account token over HTTPS. This path generates the database password inside PostgreSQL so plaintext credentials do not occur in SQL text. It is not a runtime fallback: Express continues to require the normal authenticated PostgreSQL/TLS connection.
+
+TLS certificate and hostname verification remain enabled. The existing Supabase CA lives in ignored `backend/.secrets/supabase-ca.crt`. Paths are relative to `backend/`. The verified Supabase Root 2021 SHA-256 is `700723581420DD1AC98FD7E9AC529F0EF210EADCAF87FC868A3AD7D114C2F3B7`, expiry 2031-04-26. On another machine, obtain the certificate from this project's database settings. Never disable TLS verification or add URL query parameters that override it.
+
+For email, enable Google 2-Step Verification if needed, create an [app password](https://myaccount.google.com/apppasswords) named Orwickle development while signed into the project email, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\configure-email.ps1
+```
+
+Enter it only at the hidden prompt. The helper saves it in the ignored, user-only backend environment and verifies SMTP. Restart the backend after configuration changes. See [security boundaries](docs/AUTH_SECURITY.md) for password, OTP, session and permission details.
+
+## Run the backend
 
 ```powershell
 cd C:\Flutter_dev\projects\Orwickle\backend
 npm.cmd ci
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm.cmd run dev
 ```
 
-The local `.env` already exists on this machine and contains the actual database connection. `npm.cmd start` runs without file watching. Default address: `http://127.0.0.1:3000`. The Android emulator reaches the host through `10.0.2.2`; no LAN binding or firewall exception is needed. Keep the API on loopback for local development. If the backend is already running, reuse it rather than starting a second process on port 3000.
+`npm.cmd start` runs without watching. Address: `http://127.0.0.1:3000`. Keep the local API on loopback; the Android emulator reaches it using `10.0.2.2`. Before taking over a background server started by setup, run `.\scripts\stop-setup-backend.ps1` from the project root. It verifies the recorded process belongs to this project.
 
-Setup leaves the API running in the background. Before taking over with `npm.cmd run dev`, run `.\scripts\stop-setup-backend.ps1` from the project root. It checks the recorded process and project entry point before stopping it; it does not stop an unrelated process.
+`GET /health/live` checks Express. `GET /health/ready` runs a real PostgreSQL query and verifies its authenticated TLS socket; it returns 503 when the database is unavailable. Health checks remain independent of auth. API errors are sanitized and include request IDs.
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:3000/health/live
-Invoke-RestMethod http://127.0.0.1:3000/health/ready
-```
+## Run Flutter
 
-`GET /health/live` verifies Express is running. `GET /health/ready` executes `SELECT 1, CURRENT_TIMESTAMP` through the PostgreSQL pool and verifies an authenticated TLS socket before returning `database: "ok", tls: true`. Until the real database is configured/reachable it returns HTTP 503; liveness remains available. Error responses include a request ID, with no credentials or database error details.
-
-## Start Flutter on the existing Android emulator
-
-In a second terminal, with the backend running:
+From the project root, with the backend running:
 
 ```powershell
-cd C:\Flutter_dev\projects\Orwickle\mobile
-flutter pub get
-flutter run -d emulator-5554 --dart-define=BACKEND_BASE_URL=http://10.0.2.2:3000
+.\scripts\flutter-android.ps1 pub get
+.\scripts\flutter-android.ps1 run -d emulator-5554 --dart-define=BACKEND_BASE_URL=http://10.0.2.2:3000
 ```
 
-Tap **Check connection**. The original counter still works. The panel distinguishes a reachable backend from a verified database connection. Only the debug Android manifest permits cleartext HTTP, scoped to the emulator host and loopback addresses. Release configuration is unchanged. Future deployed APIs must use HTTPS; no Supabase credentials belong in Dart defines or Flutter assets.
+This wrapper disables Windows desktop generation only for that command, avoiding a Windows symlink/Developer Mode requirement when building Android. It preserves global Flutter settings. Ordinary `flutter run` also works on machines with symlink support.
 
-## Connect the Supabase development project
+Create an account as Student, Investor or Buyer, verify the signup email, then sign in using password followed by a fresh email code. Account screens show verified identity and active sessions, with current/other-session sign-out. A valid saved session opens the account on restart. The debug build retains **Development connection → Check connection** for real emulator-to-backend verification; it is absent in release builds.
 
-The existing project is configured for the account associated with `orwickleproject@gmail.com`. The following steps are for a fresh checkout or credential replacement; remain on the Free plan and reuse `orwickle-dev`.
-
-1. In the project's **Connect** dialog, use the PostgreSQL **Session pooler** URI (supports IPv4). Put it only in `backend/.env` as `DATABASE_URL`. URL-encode password characters. Omit URI query parameters; the driver configures TLS separately and rejects attempts to override it.
-2. TLS certificate and hostname verification are always enabled. This project requires Supabase's root CA, already saved in ignored `backend/.secrets/supabase-ca.crt`, with `DATABASE_SSL_CA_FILE=.secrets/supabase-ca.crt`. On another machine, download the CA from the dashboard's Database Settings. Never set `rejectUnauthorized: false` or disable TLS. Server-side SSL enforcement is also enabled and verified.
-3. Run from `backend/`:
-
-   ```powershell
-   npm.cmd run verify:db
-   npm.cmd run storage:setup
-   ```
-
-4. Restart Express after changing `.env`. Verify `/health/ready`, then rerun the emulator test with `REQUIRE_DATABASE=true` below.
-
-`storage:setup` idempotently creates the `orwickle-confidential` bucket with `public=false` and a 10 MiB file limit. It verifies privacy and refuses to call an existing public bucket safe. It creates no upload/download policies. Confidential files must be authorized by Express before access or short-lived signed URLs are provided. Do not make the bucket public.
-
-Connection options follow the [Supabase PostgreSQL connection guide](https://supabase.com/docs/guides/database/connecting-to-postgres).
-
-The installed Supabase Root 2021 CA has SHA-256 `700723581420DD1AC98FD7E9AC529F0EF210EADCAF87FC868A3AD7D114C2F3B7` and expires on 2031-04-26. Its download location was verified against [Supabase Studio's official configuration](https://github.com/supabase/supabase/blob/72324ca0f7ae06097fbaea5128d1f2def0cf3d43/apps/studio/hooks/custom-content/custom-content.json).
-
-## Supabase CLI account access on this Windows machine
-
-The account token is encrypted with Windows DPAPI in `%LOCALAPPDATA%\Orwickle\secrets\supabase-token.dpapi`, outside this repository, with a user-only filesystem ACL. The temporary plaintext token file was removed after encryption and successful decryption were verified. The backend does not need this account-management token.
-
-From the project root, the helper loads it into `SUPABASE_ACCESS_TOKEN` only for the CLI process and restores the previous environment afterward:
+## Run the administrator web panel
 
 ```powershell
-.\scripts\supabase.ps1 whoami --output-format json
-.\scripts\supabase.ps1 projects list --output-format json
+cd C:\Flutter_dev\projects\Orwickle\admin
+npm.cmd ci
+npm.cmd run dev
 ```
 
-The encrypted credential is tied to this Windows user and machine. Do not commit it or the database `.env`. No browser login is needed for these commands on this machine. Keep CLI debug output disabled when handling credentials.
+Open **http://localhost:5173**, matching `ADMIN_ORIGIN` in the backend environment. Vite proxies `/api` to the same Express server. Administrator signup is not public. Provision once, from the project root, using the owner-only local helper:
+
+```powershell
+.\scripts\provision-admin.ps1
+```
+
+It uses `orwickleproject@gmail.com` by default and accepts the initial password at a hidden prompt. Existing administrators are preserved; existing public accounts are never promoted. If the live integration runner has already provisioned the project-email administrator, use **Forgot password?** to choose a password instead. Every fresh administrator login still requires email OTP. The panel contains only account access, recovery and session management.
+
+The project-email administrator is already provisioned on this machine. After the network blocker is resolved, use **Forgot password?** to choose its first usable password; no provisioning command is needed again.
 
 ## Checks
 
@@ -87,28 +86,34 @@ cd C:\Flutter_dev\projects\Orwickle\backend
 npm.cmd run check
 npm.cmd test
 npm.cmd audit --omit=dev
+npm.cmd run verify:db
+# Requires running Express, migrated Supabase, real configured SMTP and Gmail IMAP access:
+npm.cmd run verify:auth:live
 
-cd ..\mobile
-flutter analyze
-flutter test
-# Backend must already be running; real Android emulator HTTP request:
-flutter test integration_test/backend_connection_test.dart -d emulator-5554
-# Also requires a live, verified Supabase connection:
-flutter test integration_test/backend_connection_test.dart -d emulator-5554 --dart-define=REQUIRE_DATABASE=true
+cd ..\admin
+npm.cmd test
+npm.cmd run build
+npm.cmd run test:e2e
+npm.cmd audit --omit=dev
+
+cd ..
+.\scripts\flutter-android.ps1 analyze
+.\scripts\flutter-android.ps1 test
+.\scripts\flutter-android.ps1 test integration_test/secure_storage_test.dart -d emulator-5554
+.\scripts\flutter-android.ps1 test integration_test/backend_connection_test.dart -d emulator-5554 --dart-define=REQUIRE_DATABASE=true
 ```
 
-Backend unit tests use injected database doubles; they are separate from the real database and emulator checks. The emulator test also verifies the original counter interaction.
+Backend auth tests run an isolated PostgreSQL engine through PGlite with an in-memory email sender. Flutter unit/widget and React/browser tests use response fixtures. The live integration script separately exercises actual Express, existing Supabase and delivered email OTPs; it reads only exact tagged test emails and prints no secrets. Browser screenshots and live test evidence stay in ignored `.local/`.
 
-## Backend boundaries
+## Existing Supabase tools and private storage
 
-`src/config.js` validates environment settings; `src/db.js` owns PostgreSQL access; `src/routes/` owns HTTP routes; `src/middleware/` produces sanitized errors; `src/app.js` assembles middleware separately from process startup. Requests have security headers, a 16 KiB JSON limit, query validation, and a basic per-process rate limit. SQL uses parameters for dynamic values. Only health routes are exposed today.
+The management token is protected with Windows DPAPI outside the repository, tied to this Windows user. Its temporary plaintext file was removed. The backend never uses this management token. The existing helper loads it into a process environment only for the CLI:
 
-Authentication and permissions will be enforced in Express before future business routes call database/storage services. User identity must come from a verified server-side session/token, never a caller-supplied role or user ID. Flutter calls Express; it does not connect directly with privileged Supabase credentials. No Firebase is used. Auth, marketplace tables, confidential-file APIs, and production deployment are outside this foundation.
+```powershell
+.\scripts\supabase.ps1 whoami --output-format json
+.\scripts\supabase.ps1 projects list --output-format json
+```
 
-Use Supabase owner credentials only for initial development/setup. Before adding user-data endpoints, provision a least-privileged application database role, define authorization and RLS for each table, and separate migration credentials. Service-role/secret API keys are unnecessary for the current SQL health check. Keep future privileged keys server-side too.
+The existing `orwickle-confidential` bucket remains private, with a 10 MiB limit and no public upload/download policies. No confidential-file API is added in this scope. Storage setup requires owner privileges; after credential separation run `node --env-file=.env.migrations scripts/setup-storage.js` from `backend/` only when maintenance is required.
 
-## Git and secrets
-
-Git is initialized at the Orwickle root on `main`. Project-local author identity uses the project email; global Git settings were preserved. Ignore rules exclude `.env*` (except examples), local credentials, certificates, signing keys, dependencies, caches, builds, and `.local/` evidence. Flutter's platform ignore rules are retained. Lockfiles are committed.
-
-Never paste tokens, passwords, or database URLs into chat, command examples, commits, or issue reports. Enter secrets in local ignored files or the official sign-in interface. See [verification status](docs/VERIFICATION.md) for repository and Supabase provisioning progress.
+Secrets, dependencies, generated builds, local evidence and signing material are ignored. Lockfiles are committed. See [current verification evidence](docs/VERIFICATION.md) and [auth security decisions](docs/AUTH_SECURITY.md). No marketplace features or production deployment are included.

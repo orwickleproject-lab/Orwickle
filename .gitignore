@@ -27,6 +27,8 @@ coverage/
 *.log
 *.hprof
 *.tsbuildinfo
+test-results/
+playwright-report/
 
 # Editor and OS files
 .idea/
