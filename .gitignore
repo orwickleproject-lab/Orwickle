@@ -18,12 +18,14 @@ node_modules/
 .dart_tool/
 .pub-cache/
 .gradle/
+.kotlin/
 build/
 dist/
 coverage/
 .supabase/
 .local/
 *.log
+*.hprof
 *.tsbuildinfo
 
 # Editor and OS files
