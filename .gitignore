@@ -1,0 +1,34 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+local.properties
+.secrets/
+
+# Dependencies, generated output, tools, and local evidence
+node_modules/
+.dart_tool/
+.pub-cache/
+.gradle/
+build/
+dist/
+coverage/
+.supabase/
+.local/
+*.log
+*.tsbuildinfo
+
+# Editor and OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.swp
