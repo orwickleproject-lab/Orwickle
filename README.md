@@ -2,6 +2,8 @@
 
 Flutter client in `mobile/`, Express 5 API in `backend/`, and Supabase PostgreSQL/storage. The original counter starter is preserved in Git commit `2251b47`.
 
+Private repository: [orwickleproject-lab/Orwickle](https://github.com/orwickleproject-lab/Orwickle). GitHub CLI is authenticated as `orwickleproject-lab`; the root repository uses its credential helper locally, preserving global Git settings.
+
 ## Requirements
 
 - Node.js 24 LTS and npm (verified here: Node 24.10.0, npm 11.6.1).
