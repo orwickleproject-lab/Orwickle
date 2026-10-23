@@ -48,7 +48,7 @@ void main() {
     },
   );
   testWidgets(
-    'password step shows OTP and opens protected account only after verification',
+    'OTP opens the account with only normal sign out, which clears saved credentials',
     (tester) async {
       final storage = MemoryStorage();
       bool authenticated = false;
@@ -98,8 +98,9 @@ void main() {
               authenticated ? 200 : 401,
             );
           }
-          if (path == '/api/sessions') {
-            return http.Response('{"sessions":[]}', 200);
+          if (path == '/api/auth/logout') {
+            authenticated = false;
+            return http.Response('{}', 200);
           }
           return http.Response('{}', 404);
         }),
@@ -126,6 +127,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Sample Student'), findsOneWidget);
       expect(storage.value, isNotNull);
+      expect(find.text('Active sessions'), findsNothing);
+      expect(find.text('Sign out other sessions'), findsNothing);
+      expect(find.byTooltip('Refresh sessions'), findsNothing);
+      await tester.ensureVisible(find.text('Sign out'));
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(authenticated, isFalse);
+      expect(storage.value, isNull);
+      expect(find.byKey(const ValueKey('field-password')), findsOneWidget);
+      expect(find.text('Sample Student'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       api.close();
     },

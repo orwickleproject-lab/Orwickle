@@ -33,15 +33,14 @@ const reset = z
   .strict()
   .refine(matching);
 const empty = z.object({}).strict();
-function body(schema, work) {
+function body(
+  schema,
+  work,
+  invalidMessage = 'Check the required fields. Passwords must match and contain 12–128 characters.',
+) {
   return async (req, res) => {
     const value = schema.safeParse(req.body);
-    if (!value.success)
-      throw new HttpError(
-        400,
-        'INVALID_INPUT',
-        'Check the required fields. Passwords must match and contain 12–128 characters.',
-      );
+    if (!value.success) throw new HttpError(400, 'INVALID_INPUT', invalidMessage);
     res.json(await work(req, value.data, res));
   };
 }
@@ -87,7 +86,7 @@ export function createAuthRouter({ database: db, config, mailer }) {
   router.use((req, _res, next) => {
     if (req.get('origin') && req.get('origin') !== config.ADMIN_ORIGIN)
       return next(new HttpError(403, 'ACCESS_DENIED', 'This origin is not allowed.'));
-    if (Object.keys(req.query).length)
+    if (Object.keys(req.query).length && !(req.method === 'GET' && req.path === '/admin/users'))
       return next(new HttpError(400, 'INVALID_INPUT', 'Query parameters are not supported.'));
     next();
   });
@@ -242,59 +241,81 @@ export function createAuthRouter({ database: db, config, mailer }) {
   router.get('/admin/account', requireAccount, role('administrator'), (req, res) =>
     res.json({ account: accountView(req.account) }),
   );
+  router.get('/admin/users', requireAccount, role('administrator'), async (req, res) => {
+    const parsed = z
+      .object({
+        search: z.string().trim().max(100).default(''),
+        page: z.coerce.number().int().min(1).max(1000000).default(1),
+      })
+      .strict()
+      .safeParse(req.query);
+    if (!parsed.success)
+      throw new HttpError(400, 'INVALID_INPUT', 'Check the search text and page number.');
+    const { search, page } = parsed.data;
+    const filter = `role <> 'administrator' AND (strpos(lower(full_name),$1)>0 OR strpos(email,$1)>0)`;
+    const [count, result] = await Promise.all([
+      db.query(`SELECT count(*)::integer AS total FROM orwickle_auth.accounts WHERE ${filter}`, [
+        search.toLowerCase(),
+      ]),
+      db.query(
+        `SELECT id,full_name,email,role,email_verified_at FROM orwickle_auth.accounts
+        WHERE ${filter} ORDER BY created_at DESC,id DESC LIMIT 20 OFFSET $2`,
+        [search.toLowerCase(), (page - 1) * 20],
+      ),
+    ]);
+    res.json({
+      users: result.rows.map(accountView),
+      total: count.rows[0].total,
+      page,
+      pageSize: 20,
+    });
+  });
+  router.patch(
+    '/admin/users/:id',
+    requireAccount,
+    role('administrator'),
+    body(
+      z
+        .object({
+          fullName: z.string().trim().min(2).max(100),
+          role: z.enum(['student', 'investor', 'buyer']),
+        })
+        .strict(),
+      async (req, input) => {
+        if (!z.uuid().safeParse(req.params.id).success)
+          throw new HttpError(400, 'INVALID_INPUT', 'Invalid user.');
+        const user = await db.transaction(async (client) => {
+          const result = await client.query(
+            'SELECT orwickle_auth.update_public_user($1,$2,$3) AS id',
+            [req.params.id, input.fullName, input.role],
+          );
+          if (!result.rows[0].id) throw new HttpError(404, 'NOT_FOUND', 'User not found.');
+          const { rows } = await client.query(
+            'SELECT id,full_name,email,role,email_verified_at FROM orwickle_auth.accounts WHERE id=$1',
+            [result.rows[0].id],
+          );
+          return accountView(rows[0]);
+        });
+        return { user };
+      },
+      'Enter a name with 2–100 characters and select a public role.',
+    ),
+  );
   for (const name of ['student', 'investor', 'buyer'])
     router.get(`/roles/${name}`, requireAccount, role(name), (req, res) =>
       res.json({ account: accountView(req.account) }),
     );
-  router.get('/sessions', requireAccount, async (req, res) => {
-    const { rows } = await db.query(
-      `SELECT id,device_label AS "deviceLabel",created_at AS "createdAt",last_seen_at AS "lastSeenAt",
-      expires_at AS "expiresAt",sid=$2 AS "isCurrent" FROM orwickle_auth.sessions WHERE account_id=$1
-      AND revoked_at IS NULL AND expires_at>now() AND absolute_expires_at>now() ORDER BY created_at DESC`,
-      [req.account.id, req.sessionID],
-    );
-    res.json({ sessions: rows });
-  });
-  async function revoke(req, selector, params) {
-    return db.transaction(async (client) => {
-      const result = await client.query(
-        `UPDATE orwickle_auth.sessions SET revoked_at=now() WHERE account_id=$1 AND revoked_at IS NULL AND ${selector} RETURNING sid`,
-        [req.account.id, ...params],
-      );
-      if (result.rowCount)
-        await client.query('DELETE FROM orwickle_auth.session_store WHERE sid=ANY($1::varchar[])', [
-          result.rows.map((r) => r.sid),
-        ]);
-      return result.rowCount;
-    });
-  }
-  router.post(
-    '/sessions/revoke-others',
-    requireAccount,
-    body(empty, async (req) => ({ revoked: await revoke(req, 'sid<>$2', [req.sessionID]) })),
-  );
-  router.delete('/sessions/:id', requireAccount, async (req, res) => {
-    if (!z.uuid().safeParse(req.params.id).success)
-      throw new HttpError(400, 'INVALID_INPUT', 'Invalid session.');
-    const own = (
-      await db.query('SELECT sid FROM orwickle_auth.sessions WHERE id=$1 AND account_id=$2', [
-        req.params.id,
-        req.account.id,
-      ])
-    ).rows[0];
-    if (!own || !(await revoke(req, 'id=$2', [req.params.id])))
-      throw new HttpError(404, 'NOT_FOUND', 'Session not found.');
-    if (own.sid === req.sessionID) {
-      await destroy(req);
-      res.clearCookie(cookieName, cookieOptions);
-    }
-    res.json({ message: 'Session signed out.' });
-  });
   router.post(
     '/auth/logout',
     requireAccount,
     body(empty, async (req, _v, res) => {
-      await revoke(req, 'sid=$2', [req.sessionID]);
+      await db.transaction(async (client) => {
+        await client.query(
+          'UPDATE orwickle_auth.sessions SET revoked_at=now() WHERE account_id=$1 AND sid=$2 AND revoked_at IS NULL',
+          [req.account.id, req.sessionID],
+        );
+        await client.query('DELETE FROM orwickle_auth.session_store WHERE sid=$1', [req.sessionID]);
+      });
       await destroy(req);
       res.clearCookie(cookieName, cookieOptions);
       return { message: 'Signed out.' };

@@ -29,6 +29,7 @@ try {
     }
     stage = 'schema';
     await client.query(readFileSync('sql/002_auth.sql', 'utf8'));
+    await client.query(readFileSync('sql/003_user_management.sql', 'utf8'));
   });
   stage = 'write-runtime-environment';
   const suffix = decodeURIComponent(ownerUrl.username).split('.').slice(1).join('.');

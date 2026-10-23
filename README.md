@@ -1,6 +1,6 @@
 # Orwickle
 
-Flutter mobile app (`mobile/`), Express API (`backend/`) and a separate React administrator account panel (`admin/`). Scope is limited to signup, email OTP login, password recovery, protected account access and session management. The exact request is saved in [docs/AUTH_SCOPE.md](docs/AUTH_SCOPE.md).
+Flutter mobile app (`mobile/`), Express API (`backend/`) and a separate React administrator panel (`admin/`). Scope includes signup, email OTP login, password recovery, protected account access, normal sign-out and basic administrator user management. The original request and latest scope updates are saved in [docs/AUTH_SCOPE.md](docs/AUTH_SCOPE.md).
 
 Existing private repository: [orwickleproject-lab/Orwickle](https://github.com/orwickleproject-lab/Orwickle). Existing Free-plan Supabase project: [orwickle-dev](https://supabase.com/dashboard/project/pteqcyrstpxvvwkwujuj), Orwickle organization, Mumbai. Reuse these resources. The original Flutter starter remains in commit `2251b47`; the complete pre-auth foundation is tagged `checkpoint/pre-auth-20261020`.
 
@@ -59,7 +59,7 @@ From the project root, with the backend running:
 
 This wrapper disables Windows desktop generation only for that command, avoiding a Windows symlink/Developer Mode requirement when building Android. It preserves global Flutter settings. Ordinary `flutter run` also works on machines with symlink support.
 
-Create an account as Student, Investor or Buyer, verify the signup email, then sign in using password followed by a fresh email code. Account screens show verified identity and active sessions, with current/other-session sign-out. A valid saved session opens the account on restart. In debug builds, press and hold the Orwickle logo to open **Development connection → Check connection** for real emulator-to-backend verification; it is absent in release builds.
+Create an account as Student, Investor or Buyer, verify the signup email, then sign in using password followed by a fresh email code. Account screens show verified identity and a single **Sign out** button for the current login. A valid saved session opens the account on restart. In debug builds, press and hold the Orwickle logo to open **Development connection → Check connection** for real emulator-to-backend verification; it is absent in release builds.
 
 The mobile authentication screens follow the supplied white/navy/teal reference, including role cards and a six-cell code input with native paste and autofill support. Plus Jakarta Sans is bundled for offline use; its SIL Open Font License is included at `mobile/assets/fonts/OFL.txt`.
 
@@ -85,7 +85,11 @@ Open **http://localhost:5173**, matching `ADMIN_ORIGIN` in the backend environme
 .\scripts\provision-admin.ps1
 ```
 
-It uses `orwickleproject@gmail.com` by default and accepts the initial password at a hidden prompt. Existing administrators are preserved; existing public accounts are never promoted. If the live integration runner has already provisioned the project-email administrator, use **Forgot password?** to choose a password instead. Every fresh administrator login still requires email OTP. The panel contains only account access, recovery and session management.
+It uses `orwickleproject@gmail.com` by default and accepts the initial password at a hidden prompt. Existing administrators are preserved; existing public accounts are never promoted. If the live integration runner has already provisioned the project-email administrator, use **Forgot password?** to choose a password instead. Every fresh administrator login still requires email OTP.
+
+The administrator panel uses a plain layout with the Orwickle logo, a searchable users table and normal **Sign out**. It lists Student, Investor and Buyer accounts, including their email verification status, with 20 users per page. Administrators can edit a user's name and public role. Administrator accounts are excluded and cannot be promoted or edited through this interface. Changing a public role invalidates that user's old login and outstanding verification requests.
+
+Existing installations apply the small user-management database function once from `backend/` using `npm.cmd run migrate:users`. It uses the existing ignored `.env.migrations` owner environment; normal API traffic continues to use the restricted runtime role. Fresh authentication setup includes this migration automatically.
 
 The project-email administrator is already provisioned on this machine. After the network blocker is resolved, use **Forgot password?** to choose its first usable password; no provisioning command is needed again.
 

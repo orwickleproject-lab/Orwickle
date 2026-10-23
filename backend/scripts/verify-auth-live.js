@@ -146,16 +146,12 @@ try {
     other = clients[2],
     b = client();
   await login(b, emails[0]);
-  const rows = (await a.call('/api/sessions')).sessions;
-  check(
-    rows.length === 2 && rows.every((s) => !('sid' in s)),
-    'Two active sessions are listed without bearer identifiers',
-  );
-  await other.call(`/api/sessions/${rows[0].id}`, {}, 404, 'DELETE');
-  await a.call('/api/sessions/revoke-others', {});
+  await a.call('/api/account');
+  await b.call('/api/auth/logout', {});
   await b.call('/api/account', undefined, 401);
   await a.call('/api/account');
-  check(true, 'Other-session revocation and cross-account isolation');
+  await other.call('/api/account');
+  check(true, 'Sign out affects only the requesting client; other logins remain valid');
   stage = 'expiry and recovery';
   const expiredClient = client();
   const expired = await expiredClient.call('/api/auth/login', { email: emails[0], password: pass });

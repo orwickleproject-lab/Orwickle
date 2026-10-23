@@ -297,7 +297,7 @@ export function createAuthService({ database: db, mailer, pepper }) {
           'RESET_EXPIRED',
           'Password reset has expired or already been used. Request a new recovery code.',
         );
-      return { message: 'Password updated. All sessions were signed out. Sign in again.' };
+      return { message: 'Password updated. Sign in again.' };
     },
   };
 }

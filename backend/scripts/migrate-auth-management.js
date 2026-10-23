@@ -38,6 +38,8 @@ try {
     (reuse ? '' : roleSetup) +
     '\n' +
     readFileSync('sql/002_auth.sql', 'utf8') +
+    '\n' +
+    readFileSync('sql/003_user_management.sql', 'utf8') +
     (reuse
       ? '\nSELECT 1 AS ok;'
       : "\nSELECT current_setting('orwickle.runtime_password') AS generated_password;");

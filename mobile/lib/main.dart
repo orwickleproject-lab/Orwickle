@@ -40,7 +40,6 @@ class _AccountFlowState extends State<AccountFlow> {
   String view = 'boot', role = 'student', error = '', notice = '';
   String? resetToken;
   Map<String, dynamic>? account, challenge;
-  List<dynamic> sessions = [];
   bool busy = false, showPassword = false, showConfirmation = false;
   late final Timer timer;
   int get resendSeconds => challenge == null
@@ -118,11 +117,9 @@ class _AccountFlowState extends State<AccountFlow> {
       return;
     }
     await api.call('/roles/${user['role']}');
-    final list = await api.call('/sessions');
     if (mounted) {
       setState(() {
         account = user;
-        sessions = list['sessions'] as List<dynamic>;
         view = 'account';
       });
     }
@@ -209,10 +206,7 @@ class _AccountFlowState extends State<AccountFlow> {
         await api.clear();
         if (!mounted) return;
         navigate('login');
-        setState(
-          () => notice =
-              'Password updated. All sessions signed out. Sign in again.',
-        );
+        setState(() => notice = 'Password updated. Sign in again.');
       }
     });
   }
@@ -383,8 +377,8 @@ class _AccountFlowState extends State<AccountFlow> {
     'login' => 'Sign in to continue',
     'recovery' => 'Enter your email to receive a reset code.',
     'otp' => 'Enter the 6-digit code sent to\n$maskedEmail',
-    'reset' => 'Choose a password with at least 12 characters. Your other sessions will be signed out.',
-    'account' => 'Your verified account and active sessions.',
+    'reset' => 'Choose a password with at least 12 characters.',
+    'account' => 'Your verified account.',
     'denied' => 'This account uses the administrator web panel.',
     _ => 'Checking your saved session…',
   };
@@ -787,98 +781,6 @@ class _AccountFlowState extends State<AccountFlow> {
       ),
     ),
     const SizedBox(height: 30),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Active sessions',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: ink,
-          ),
-        ),
-        IconButton(
-          tooltip: 'Refresh sessions',
-          onPressed: busy ? null : () => run(loadAccount),
-          icon: const Icon(Icons.refresh_rounded),
-        ),
-      ],
-    ),
-    const Text(
-      'Review where you’re signed in.',
-      style: TextStyle(color: muted, fontSize: 13),
-    ),
-    const SizedBox(height: 10),
-    ...sessions.map((raw) {
-      final s = raw as Map<String, dynamic>;
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: fieldBorder)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.devices_outlined, size: 19, color: muted),
-                const SizedBox(width: 10),
-                Text(
-                  s['isCurrent'] == true ? 'This session' : 'Other session',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: ink,
-                  ),
-                ),
-                if (s['isCurrent'] == true) ...[
-                  const Spacer(),
-                  const Text(
-                    'Current',
-                    style: TextStyle(color: muted, fontSize: 11),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              s['deviceLabel'] as String,
-              style: const TextStyle(color: muted, fontSize: 11, height: 1.5),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Last active ${dateLabel(s['lastSeenAt'] as String)}\nExpires ${dateLabel(s['expiresAt'] as String)}',
-              style: const TextStyle(color: muted, fontSize: 12, height: 1.7),
-            ),
-            if (s['isCurrent'] != true)
-              TextButton(
-                onPressed: busy
-                    ? null
-                    : () => run(() async {
-                        await api.call('/sessions/${s['id']}', {}, 'DELETE');
-                        await loadAccount();
-                      }),
-                child: const Text('Sign out this session'),
-              ),
-          ],
-        ),
-      );
-    }),
-    const SizedBox(height: 26),
-    OutlinedButton(
-      onPressed: busy || sessions.length < 2
-          ? null
-          : () => run(() async {
-              await api.call('/sessions/revoke-others', {});
-              await loadAccount();
-              if (mounted) {
-                setState(() => notice = 'Other sessions signed out.');
-              }
-            }),
-      child: const Text('Sign out other sessions'),
-    ),
-    const SizedBox(height: 12),
     FilledButton(
       onPressed: busy ? null : () => run(signOut),
       child: const Text('Sign out'),
@@ -886,8 +788,4 @@ class _AccountFlowState extends State<AccountFlow> {
   ];
   String roleLabel(String role) =>
       '${role[0].toUpperCase()}${role.substring(1)}';
-  String dateLabel(String raw) {
-    final d = DateTime.parse(raw).toLocal();
-    return '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-  }
 }

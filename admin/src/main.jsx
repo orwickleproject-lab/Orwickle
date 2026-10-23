@@ -4,12 +4,16 @@ import { createApi } from './api.js';
 import './style.css';
 
 const defaultApi = createApi();
-const labelDate = (value) =>
-  new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const roleLabel = (role) => role.charAt(0).toUpperCase() + role.slice(1);
 export function App({ api = defaultApi }) {
   const [view, setView] = useState('boot');
   const [account, setAccount] = useState(null);
-  const [sessions, setSessions] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [editing, setEditing] = useState(null);
   const [challenge, setChallenge] = useState(null);
   const [resetToken, setResetToken] = useState(null);
   const [email, setEmail] = useState('');
@@ -18,7 +22,7 @@ export function App({ api = defaultApi }) {
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -37,13 +41,21 @@ export function App({ api = defaultApi }) {
     setCode('');
     setResetToken(null);
     setChallenge(null);
+    setShowPassword(false);
+  }
+  async function loadUsers(query = '', nextPage = 1) {
+    const params = new URLSearchParams({ search: query, page: String(nextPage) });
+    const data = await api.call(`/admin/users?${params}`);
+    setUsers(data.users);
+    setTotal(data.total);
+    setPage(data.page);
+    setAppliedSearch(query);
   }
   async function loadAccount() {
     const data = await api.call('/admin/account');
-    const list = await api.call('/sessions');
     setAccount(data.account);
-    setSessions(list.sessions);
     setView('account');
+    await loadUsers();
   }
   useEffect(() => {
     let alive = true;
@@ -52,17 +64,25 @@ export function App({ api = defaultApi }) {
         await loadAccount();
       } catch (e) {
         if (alive) {
-          setView(e.status === 403 ? 'denied' : 'login');
+          setView((current) =>
+            e.status === 403
+              ? 'denied'
+              : e.status === 401 || current === 'boot'
+                ? 'login'
+                : current,
+          );
           if (e.status !== 401) setError(e.message);
           if (e.code === 'SESSION_EXPIRED')
-            setNotice('Your session expired or was signed out. Please sign in again.');
+            setNotice('Your session expired. Please sign in again.');
         }
+      } finally {
+        if (alive) setBusy(false);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [api]);
   async function run(work) {
     if (busy) return;
     setBusy(true);
@@ -74,7 +94,9 @@ export function App({ api = defaultApi }) {
       if (view === 'account' && e.status === 401) {
         navigate('login');
         setAccount(null);
-        setNotice('Your session expired or was signed out. Please sign in again.');
+        setUsers([]);
+        setEditing(null);
+        setNotice('Your session expired. Please sign in again.');
       } else if (view === 'account' && e.status === 403) setView('denied');
       setError(e.message);
     } finally {
@@ -115,104 +137,62 @@ export function App({ api = defaultApi }) {
           confirmPassword: confirmation,
         });
         navigate('login');
-        setNotice('Password updated. All sessions have been signed out. Sign in again.');
+        setNotice('Password updated. Sign in again.');
       }
     });
   }
   async function signOut() {
     await api.call('/auth/logout', {});
     setAccount(null);
+    setUsers([]);
+    setSearch('');
+    setEditing(null);
     navigate('login');
     setNotice('You have signed out.');
   }
   const titles = {
-    boot: 'Opening your account',
-    login: 'Welcome back.',
-    recovery: 'Reset your password.',
-    otp: 'Check your inbox.',
-    reset: 'Choose a new password.',
-    account: 'Your account.',
-    denied: 'Access restricted.',
+    boot: 'Loading…',
+    login: 'Admin sign in',
+    recovery: 'Reset password',
+    otp: 'Verify email',
+    reset: 'New password',
+    account: 'Users',
+    denied: 'Access restricted',
   };
   return (
-    <main className="shell">
-      <aside className="brand-panel">
+    <main>
+      <header>
         <a className="brand" href="/" aria-label="Orwickle administrator home">
-          <img src="/mark.svg" alt="" />
-          Orwickle<span>ADMINISTRATOR</span>
+          <img src="/mark.svg" alt="" width="32" height="32" />
+          <strong>Orwickle</strong>
+          <span>Admin</span>
         </a>
-        <div className="brand-story">
-          <span className="eyebrow">A PLACE TO BEGIN</span>
-          <h1>
-            Good things start
-            <br />
-            with trust.
-          </h1>
-          <p>A secure space for your Orwickle account.</p>
-          <div className="orbit" aria-hidden="true">
-            <i />
-            <b />
-          </div>
-        </div>
-        <footer>
-          Orwickle <span>Account access</span>
-        </footer>
-      </aside>
-      <section className={`content ${view === 'account' ? 'wide' : ''}`}>
-        <div className="mobile-brand">
-          <img src="/mark.svg" alt="" />
-          Orwickle <span>Administrator</span>
-        </div>
-        <div className="content-inner">
-          <span className="eyebrow">
-            {view === 'account' ? 'SIGNED IN SECURELY' : 'ADMINISTRATOR ACCESS'}
-          </span>
-          <h2>{titles[view]}</h2>
-          {view === 'login' && (
-            <p className="subtitle">
-              Sign in with your provisioned administrator account. We’ll email a code after checking
-              your password.
-            </p>
-          )}
-          {view === 'recovery' && (
-            <p className="subtitle">
-              If an eligible account exists, we’ll send a recovery code to your email.
-            </p>
-          )}
-          {view === 'otp' && (
-            <p className="subtitle">
-              Enter the six-digit {challenge.purpose === 'login' ? 'sign-in' : 'recovery'} code sent
-              to <strong>{email}</strong>. It expires in 10 minutes.
-            </p>
-          )}
-          {view === 'reset' && (
-            <p className="subtitle">
-              Use at least 12 characters. Updating your password signs out every existing session.
-            </p>
-          )}
-          {notice && (
-            <div role="status" className="message success">
-              {notice}
-            </div>
-          )}
-          {error && (
-            <div role="alert" className="message error">
-              {error}
-            </div>
-          )}
-          {view === 'boot' && <p role="status">Checking your saved session…</p>}
-          {view === 'denied' && (
-            <>
-              <p>This panel is available to separately provisioned administrators.</p>
-              <button disabled={busy} onClick={() => run(signOut)}>
-                Sign out of this account
-              </button>
-              <button className="text" onClick={() => navigate('login')}>
-                Back to sign in
-              </button>
-            </>
-          )}
-          {['login', 'recovery', 'otp', 'reset'].includes(view) && (
+        {view === 'account' && (
+          <button disabled={busy} onClick={() => run(signOut)}>
+            Sign out
+          </button>
+        )}
+      </header>
+      <section className={view === 'account' ? '' : 'auth'} aria-busy={busy}>
+        <h1>{titles[view]}</h1>
+        {notice && <p role="status">{notice}</p>}
+        {error && <p role="alert">{error}</p>}
+        {view === 'boot' && <p role="status">Checking your login…</p>}
+        {view === 'denied' && (
+          <>
+            <p>Sign in with an administrator account.</p>
+            <button disabled={busy} onClick={() => run(signOut)}>
+              Sign out
+            </button>
+          </>
+        )}
+        {['login', 'recovery', 'otp', 'reset'].includes(view) && (
+          <>
+            {view === 'login' && <p>Enter your password, then verify the email code.</p>}
+            {view === 'recovery' && <p>We’ll email a recovery code if the account is eligible.</p>}
+            {view === 'otp' && (
+              <p>Enter the six-digit code sent to {email}. It expires in 10 minutes.</p>
+            )}
             <form onSubmit={submit}>
               {['login', 'recovery'].includes(view) && (
                 <label>
@@ -224,7 +204,6 @@ export function App({ api = defaultApi }) {
                     maxLength={254}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
                     disabled={busy}
                   />
                 </label>
@@ -232,7 +211,7 @@ export function App({ api = defaultApi }) {
               {['login', 'reset'].includes(view) && (
                 <label>
                   {view === 'reset' ? 'New password' : 'Password'}
-                  <div className="password">
+                  <span className="password">
                     <input
                       aria-label={view === 'reset' ? 'New password' : 'Password'}
                       type={showPassword ? 'text' : 'password'}
@@ -246,13 +225,13 @@ export function App({ api = defaultApi }) {
                     />
                     <button
                       type="button"
-                      className="reveal"
+                      disabled={busy}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? 'Hide' : 'Show'}
                     </button>
-                  </div>
+                  </span>
                 </label>
               )}
               {view === 'reset' && (
@@ -274,7 +253,6 @@ export function App({ api = defaultApi }) {
                 <label>
                   Email verification code
                   <input
-                    className="code"
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -288,30 +266,23 @@ export function App({ api = defaultApi }) {
                   />
                 </label>
               )}
-              <button className="primary" type="submit" disabled={busy}>
+              <button type="submit" disabled={busy}>
                 {busy
                   ? 'Please wait…'
                   : {
-                      login: 'Continue with email code',
+                      login: 'Continue',
                       recovery: 'Send recovery code',
                       otp: 'Verify code',
                       reset: 'Update password',
                     }[view]}
-                <span aria-hidden="true">↗</span>
               </button>
               {view === 'login' && (
-                <button
-                  className="text"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => navigate('recovery')}
-                >
+                <button type="button" disabled={busy} onClick={() => navigate('recovery')}>
                   Forgot password?
                 </button>
               )}
               {view === 'otp' && (
                 <button
-                  className="text"
                   type="button"
                   disabled={busy || seconds > 0 || challenge.resendsRemaining === 0}
                   onClick={() =>
@@ -321,105 +292,156 @@ export function App({ api = defaultApi }) {
                         purpose: challenge.purpose,
                       });
                       setChallenge({ ...data, purpose: challenge.purpose });
-                      setNotice('A new code has been sent. Use the latest email.');
+                      setNotice('A new code has been sent.');
                     })
                   }
                 >
                   {seconds
                     ? `Resend in ${seconds}s`
                     : challenge.resendsRemaining
-                      ? `Resend code · ${challenge.resendsRemaining} remaining`
+                      ? 'Resend code'
                       : 'Resend limit reached'}
                 </button>
               )}
               {view !== 'login' && (
-                <button
-                  type="button"
-                  className="text"
-                  disabled={busy}
-                  onClick={() => navigate('login')}
-                >
+                <button type="button" disabled={busy} onClick={() => navigate('login')}>
                   Back to sign in
                 </button>
               )}
             </form>
-          )}
-          {view === 'account' && account && (
-            <>
-              <div className="account-card">
-                <div className="avatar">{account.fullName.charAt(0).toUpperCase()}</div>
-                <div>
-                  <h3>{account.fullName}</h3>
-                  <p>{account.email}</p>
-                  <span className="badge">Administrator · Email verified</span>
-                </div>
-              </div>
-              <div className="section-heading">
-                <div>
-                  <h3>Active sessions</h3>
-                  <p>Review where you’re signed in.</p>
-                </div>
+          </>
+        )}
+        {view === 'account' && account && (
+          <>
+            <p className="muted">Signed in as {account.email}</p>
+            {editing && (
+              <form
+                className="editor"
+                aria-label="Edit user"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  run(async () => {
+                    await api.call(
+                      `/admin/users/${editing.id}`,
+                      { fullName: editing.fullName.trim(), role: editing.role },
+                      'PATCH',
+                    );
+                    setEditing(null);
+                    await loadUsers(appliedSearch, page);
+                    setNotice('User updated.');
+                  });
+                }}
+              >
+                <h2>Edit user</h2>
+                <p>{editing.email}</p>
+                <label>
+                  Full name
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    value={editing.fullName}
+                    onChange={(event) => setEditing({ ...editing, fullName: event.target.value })}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  Role
+                  <select
+                    aria-label="Role"
+                    value={editing.role}
+                    onChange={(event) => setEditing({ ...editing, role: event.target.value })}
+                    disabled={busy}
+                  >
+                    {['student', 'investor', 'buyer'].map((role) => (
+                      <option key={role} value={role}>
+                        {roleLabel(role)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button disabled={busy}>Save changes</button>
+                <button type="button" disabled={busy} onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+              </form>
+            )}
+            <form
+              className="toolbar"
+              role="search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                run(() => loadUsers(search.trim(), 1));
+              }}
+            >
+              <input
+                type="search"
+                aria-label="Search users"
+                placeholder="Search name or email"
+                maxLength={100}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                disabled={busy}
+              />
+              <button disabled={busy}>Search</button>
+            </form>
+            <p>
+              {total} {total === 1 ? 'user' : 'users'}
+            </p>
+            <div className="table-wrap" role="region" aria-label="Users table" tabIndex={0}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Email status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id}>
+                      <td>{user.fullName}</td>
+                      <td>{user.email}</td>
+                      <td>{roleLabel(user.role)}</td>
+                      <td>{user.emailVerified ? 'Verified' : 'Pending'}</td>
+                      <td>
+                        <button
+                          aria-label={`Edit ${user.fullName}`}
+                          disabled={busy}
+                          onClick={() => setEditing({ ...user })}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {users.length === 0 && <p>{busy ? 'Loading users…' : 'No users found.'}</p>}
+            {total > 20 && (
+              <nav aria-label="User pages">
                 <button
-                  className="small secondary"
-                  disabled={busy}
-                  onClick={() => run(loadAccount)}
+                  disabled={busy || page === 1}
+                  onClick={() => run(() => loadUsers(appliedSearch, page - 1))}
                 >
-                  Refresh
+                  Previous
                 </button>
-              </div>
-              <ul className="sessions">
-                {sessions.map((s) => (
-                  <li key={s.id}>
-                    <div className="session-title">
-                      <strong>{s.isCurrent ? 'This session' : 'Other session'}</strong>
-                      {s.isCurrent && <span className="dot">Current</span>}
-                    </div>
-                    <p className="device">{s.deviceLabel}</p>
-                    <p>
-                      Last active {labelDate(s.lastSeenAt)}
-                      <br />
-                      Expires {labelDate(s.expiresAt)}
-                    </p>
-                    {!s.isCurrent && (
-                      <button
-                        className="text inline"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            await api.call(`/sessions/${s.id}`, {}, 'DELETE');
-                            await loadAccount();
-                            setNotice('Session signed out.');
-                          })
-                        }
-                      >
-                        Sign out this session
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              <div className="actions">
+                <span>
+                  Page {page} of {Math.ceil(total / 20)}
+                </span>
                 <button
-                  className="secondary"
-                  disabled={busy || sessions.length < 2}
-                  onClick={() =>
-                    run(async () => {
-                      await api.call('/sessions/revoke-others', {});
-                      await loadAccount();
-                      setNotice('Other sessions signed out.');
-                    })
-                  }
+                  disabled={busy || page * 20 >= total}
+                  onClick={() => run(() => loadUsers(appliedSearch, page + 1))}
                 >
-                  Sign out other sessions
+                  Next
                 </button>
-                <button className="primary" disabled={busy} onClick={() => run(signOut)}>
-                  Sign out
-                </button>
-              </div>
-            </>
-          )}
-          <p className="security-note">Protected with password and email verification.</p>
-        </div>
+              </nav>
+            )}
+          </>
+        )}
       </section>
     </main>
   );

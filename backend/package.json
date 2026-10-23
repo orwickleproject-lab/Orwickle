@@ -10,6 +10,7 @@
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/server.js",
     "check": "node scripts/check.js",
+    "migrate:users": "node --env-file=.env.migrations scripts/migrate-user-management.js",
     "test": "node --test",
     "verify:db": "node --env-file-if-exists=.env scripts/verify-db.js",
     "storage:setup": "node --env-file-if-exists=.env scripts/setup-storage.js",

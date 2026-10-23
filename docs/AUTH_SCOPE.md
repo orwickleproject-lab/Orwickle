@@ -1,3 +1,9 @@
+**Latest scope update — 22 October 2026:** Simplify the administrator panel to the Orwickle logo, a plain layout with minimal CSS and basic user management. Include a paginated, searchable list of public users with name, email, role and email verification status; allow name and Student/Investor/Buyer role edits. Administrator accounts remain outside this interface. Keep administrator password/email-OTP login, recovery and normal sign-out. This update authorizes basic user management and supersedes the original exclusion below.
+
+**Earlier scope update — 22 October 2026:** Remove the user-facing active-session list, refresh, individual remote logout and sign-out-other-sessions feature from mobile and administrator clients, together with their backend management endpoints. Account screens offer only normal **Sign out** for the current login. Keep the internal authentication session, saved-login restoration, expiry and password-reset revocation. This update overrides the session-management UI requirements in the original request preserved below.
+
+**Original request — preserved verbatim:**
+
 **Paste this into the Codex chat box in VS Code:**
 
 Build the following features in my existing Orwickle project:
